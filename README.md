@@ -51,13 +51,13 @@ The service uses PostgreSQL and creates the tables automatically on app startup 
 ### Config
 
 - `allowed_domains`
-- stored as a JSON array such as `["college.edu", "student.college.edu"]`
+- stored as a JSON array such as `["samstack.site", "visionx.io"]`
 
 ## Domain parsing
 
 When the supplied email matches an allowed domain, the service extracts the local-part pattern such as:
 
-- `25ds-ibtisam@college.edu`
+- `25ds-ibtisam@samstack.site`
 
 and stores details in `user_details`:
 

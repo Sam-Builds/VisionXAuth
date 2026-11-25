@@ -6,9 +6,11 @@ using VisionX.Auth.Data;
 using VisionX.Auth.Models;
 using VisionX.Auth.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 var authVersion = builder.Configuration["App:Version"]
@@ -41,12 +43,16 @@ var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "visionx-app";
 
 var defaultCorsOrigins = new[]
 {
+    "https://visionx.samstack.site",
+    "https://samstack.site",
     "https://admin.visionx.io",
     "https://manage.visionx.io",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:5174",
-    "http://127.0.0.1:5174"
+    "http://127.0.0.1:5174",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
 };
 
 var corsOriginsConfig = builder.Configuration["Cors:AllowedOrigins"];
@@ -70,7 +76,10 @@ builder.Services.AddCors(options =>
             {
                 var uri = new Uri(origin);
                 if (uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) &&
-                    (uri.Host.Equals("visionx.io", StringComparison.OrdinalIgnoreCase) ||
+                    (uri.Host.Equals("visionx.samstack.site", StringComparison.OrdinalIgnoreCase) ||
+                     uri.Host.Equals("samstack.site", StringComparison.OrdinalIgnoreCase) ||
+                     uri.Host.EndsWith(".samstack.site", StringComparison.OrdinalIgnoreCase) ||
+                     uri.Host.Equals("visionx.io", StringComparison.OrdinalIgnoreCase) ||
                      uri.Host.EndsWith(".visionx.io", StringComparison.OrdinalIgnoreCase)))
                 {
                     return true;
@@ -104,15 +113,26 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
     .Configure<TokenService>((options, tokenService) =>
     {
+        var validIssuers = new[]
+        {
+            "https://visionx.samstack.site/auth",
+            "https://visionx.samstack.site",
+            "visionx-auth-service",
+            jwtIssuer
+        }
+        .Where(s => !string.IsNullOrWhiteSpace(s))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
+            ValidIssuers = validIssuers,
             ValidateAudience = true,
+            ValidAudience = jwtAudience,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtIssuer,
-            ValidAudience = jwtAudience,
             ValidAlgorithms = new[] { SecurityAlgorithms.RsaSha256 },
             IssuerSigningKey = tokenService.GetValidationKey(),
             RoleClaimType = "role"
@@ -172,10 +192,41 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.UseSwagger();
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
+// Handle Cloudflare Tunnel path routing (e.g. visionx.samstack.site/auth)
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/auth", out var remainingPath))
+    {
+        context.Request.PathBase = "/auth";
+        context.Request.Path = remainingPath.HasValue && !string.IsNullOrEmpty(remainingPath.Value) ? remainingPath : "/";
+    }
+    await next();
+});
+
+app.UseSwagger(c =>
+{
+    c.PreSerializeFilters.Add((swaggerDoc, httpReq) =>
+    {
+        var host = httpReq.Headers["X-Forwarded-Host"].FirstOrDefault() ?? httpReq.Host.Value;
+        var scheme = httpReq.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? httpReq.Scheme;
+        var pathBase = httpReq.PathBase.Value ?? "";
+        swaggerDoc.Servers = new List<OpenApiServer>
+        {
+            new() { Url = $"{scheme}://{host}{pathBase}" }
+        };
+    });
+});
 app.UseSwaggerUI(options =>
 {
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "VisionX Auth Service");
+    options.SwaggerEndpoint("v1/swagger.json", "VisionX Auth Service");
     options.RoutePrefix = "swagger";
 });
 
@@ -183,6 +234,12 @@ app.UseRouting();
 app.UseCors("AdminCors");
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/", (HttpContext context) =>
+{
+    var target = context.Request.PathBase.HasValue ? $"{context.Request.PathBase}/swagger" : "/swagger";
+    return Results.Redirect(target);
+});
 
 app.MapGet("/api/meta/version", () => Results.Ok(new
 {
@@ -204,7 +261,7 @@ app.Run();
 static async Task SeedDefaultConfigAsync(AuthDbContext db)
 {
     var existing = await db.AppConfigs.FirstOrDefaultAsync(x => x.Key == "allowed_domains");
-    var defaultDomains = new List<string> { "college.edu", "student.college.edu" };
+    var defaultDomains = new List<string> { "samstack.site", "visionx.io" };
     var payload = JsonSerializer.Serialize(defaultDomains);
 
     if (existing is null)

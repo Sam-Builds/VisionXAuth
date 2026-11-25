@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: visionx-auth-service
     env_file:
-      - path: /opt/visionx/secrets/.env.auth
+      - path: /opt/VisionX/secrets/.env.auth
         required: false
       - path: ./.env
         required: false
@@ -14,26 +14,31 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
       DOTNET_USE_POLLING_FILE_WATCHER: "1"
       DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE: "false"
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      Jwt__Issuer: ${JWT_ISSUER:-visionx-auth-service}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-visionx_auth};Username=${POSTGRES_USER:-visionx_user};Password=${POSTGRES_PASSWORD:-visionx_password}
+      Jwt__Issuer: ${JWT_ISSUER:-https://visionx.samstack.site/auth}
       Jwt__Audience: ${JWT_AUDIENCE:-visionx-app}
       Jwt__KeyId: ${JWT_KEY_ID:-visionx-auth-rs256-v1}
       Jwt__PrivateKeyPath: ${JWT_PRIVATE_KEY_PATH:-/run/secrets/jwt_private.pem}
       Jwt__PrivateKeyPem: ${JWT_PRIVATE_KEY_PEM:-}
-      Admin__Email: ${ADMIN_EMAIL}
-      Admin__Password: ${ADMIN_PASSWORD}
-      Cors__AllowedOrigins: ${CORS_ALLOWED_ORIGINS}
-      App__Version: ${AUTH_APP_VERSION:-auth-dev}
+      Admin__Email: ${ADMIN_EMAIL:-admin@visionx.io}
+      Admin__Password: ${ADMIN_PASSWORD:-Samstack123!}
+      Cors__AllowedOrigins: ${CORS_ALLOWED_ORIGINS:-https://visionx.samstack.site,https://samstack.site,https://admin.visionx.io,https://manage.visionx.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}
+      App__Version: ${AUTH_APP_VERSION:-v1.0.1}
       SessionEvents__Applications__0__Name: VisionXBackend
-      SessionEvents__Applications__0__WebhookUrl: ${VISIONX_BACKEND_WEBHOOK_URL:-https://api.visionx.io/api/internal/auth/session-events}
-      SessionEvents__Applications__0__Secret: ${SESSION_WEBHOOK_SECRET:-change-me-webhook-secret}
+      SessionEvents__Applications__0__WebhookUrl: ${VISIONX_BACKEND_WEBHOOK_URL:-https://visionx.samstack.site/api/internal/auth/session-events}
+      SessionEvents__Applications__0__Secret: ${SESSION_WEBHOOK_SECRET:-VisionX_SessionEvent_SharedSecret_2026}
       SessionEvents__Applications__0__Enabled: "true"
+      SessionEvents__Applications__1__Name: NotificationsService
+      SessionEvents__Applications__1__WebhookUrl: ${NOTIFICATIONS_WEBHOOK_URL:-https://visionx.samstack.site/notifs/api/internal/auth/session-events}
+      SessionEvents__Applications__1__Secret: ${SESSION_WEBHOOK_SECRET:-VisionX_SessionEvent_SharedSecret_2026}
+      SessionEvents__Applications__1__Enabled: "true"
     ports:
       - "${APP_PORT:-6509}:8080"
     volumes:
-      - ${JWT_SECRETS_DIR:-/opt/visionx/secrets}:/run/secrets:ro
+      - ${JWT_SECRETS_DIR:-/opt/VisionX/secrets}:/run/secrets:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/meta/version || exit 1"]
       interval: 15s
@@ -51,22 +56,22 @@ services:
     image: postgres:16-alpine
     container_name: visionx-auth-postgres
     env_file:
-      - path: /opt/visionx/secrets/.env.auth
+      - path: /opt/VisionX/secrets/.env.auth
         required: false
       - path: ./.env
         required: false
       - path: ./.env.main
         required: false
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-visionx_auth}
+      POSTGRES_USER: ${POSTGRES_USER:-visionx_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visionx_password}
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-visionx_user} -d ${POSTGRES_DB:-visionx_auth}"]
       interval: 10s
       timeout: 5s
       retries: 5
