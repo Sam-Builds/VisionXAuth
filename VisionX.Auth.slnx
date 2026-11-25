@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="VisionX.Auth.Tests/VisionX.Auth.Tests.csproj" />
+  <Project Path="VisionX.Auth/VisionX.Auth.csproj" />
+</Solution>

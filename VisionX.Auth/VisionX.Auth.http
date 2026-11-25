@@ -1,0 +1,6 @@
+@VisionX.Auth_HostAddress = http://localhost:5093
+
+GET {{VisionX.Auth_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
