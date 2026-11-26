@@ -52,7 +52,7 @@ public sealed class BrevoEmailService : IEmailService
         var senderEmail = ResolveConfig(
             "BREVO_SENDER_EMAIL",
             "Brevo:SenderEmail",
-            "Brevo__SenderEmail") ?? "notifications@visionx.io";
+            "Brevo__SenderEmail") ?? "info@samstack.site";
 
         var senderName = ResolveConfig(
             "BREVO_SENDER_NAME",
